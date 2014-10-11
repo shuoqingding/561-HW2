@@ -25,6 +25,7 @@ class Reversi( object ):
     opponent_coord = []
     max_weight = -999
     best_move = None
+    pre_coord = None
 
     def __init__( self ):
         with open( "input.txt", "U" ) as f:
@@ -75,14 +76,43 @@ class Reversi( object ):
 
     def greedy( self, ):
 
+        moves = []
         for op in self.opponent_coord:
             for x_move in ( -1, 0, 1 ):
                 for y_move in ( -1, 0, 1 ):
-                    self.greedy_evaluate( op, [y_move, x_move] )
+                    val = self.calculate_val( op, [y_move, x_move] )
+                    if val is not None:
+                        #new_coord = ( op[0]+y_move, op[1]+x_move )
+                        moves.append( ( val, op, ( y_move, x_move ) ) )
 
+        if not moves:
+            exit(0)
+
+        self.best_move = max( moves, key=lambda x:x[0] )[2]
+        self.adj_op = max( moves, key=lambda x:x[0] )[1]
+
+        self.convert_opponents( self.adj_op, self.best_move )
         self.init_states[self.best_move[0]][self.best_move[1]] = self.player
+
         for i in self.init_states:
             print(i)
+
+    def convert_opponents( self, adj_op, best_move ):
+        y_move, x_move = best_move
+        loc = list(adj_op)
+
+        while self.init_states[loc[0]][loc[1]] != self.player:
+            # should not cross the edge
+            self.init_states[loc[0]][loc[1]] = self.player
+            loc[0] = loc[0] - y_move
+            loc[1] = loc[1] - x_move
+
+
+    def minimax( self, ):
+        pass
+
+    def alphabeta( self, ):
+        pass
 
     def cross_edge( self, coord ):
 
@@ -90,7 +120,7 @@ class Reversi( object ):
             return True
         return False
 
-    def greedy_evaluate( self, orig_coord, move ):
+    def calculate_val( self, orig_coord, move ):
         valid_move = False
         new_coord = (orig_coord[0]+move[0], orig_coord[1]+move[1])
         if self.init_states[ new_coord[0] ][ new_coord[1] ] != "*":
@@ -108,14 +138,20 @@ class Reversi( object ):
         if not valid_move:
             return
 
+        return self.init_weight[ new_coord[0] ][ new_coord[1]]
+
+        """
         if self.init_weight[ new_coord[0] ][ new_coord[1]] > self.max_weight:
+            self.pre_coord = orig_coord
             self.best_move = new_coord
             self.max_weight = self.init_weight[ new_coord[0] ][ new_coord[1]]
 
         if self.init_weight[ new_coord[0] ][ new_coord[1]] == self.max_weight:
             if self.best_move[0] > new_coord[0]:
+                self.pre_coord = orig_coord
                 self.best_move = new_coord
                 self.max_weight = self.init_weight[ new_coord[0] ][ new_coord[1]]
+        """
 
 if __name__ == "__main__":
     reversi = Reversi()
