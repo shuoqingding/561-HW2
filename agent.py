@@ -74,38 +74,49 @@ class Reversi( object ):
             i = i + 1
         assert( i == j == self.BOARD_SIZE )
 
+    def find_best_move( self, ):
+        pass
     def greedy( self, ):
 
         moves = []
         for op in self.opponent_coord:
             for x_move in ( -1, 0, 1 ):
                 for y_move in ( -1, 0, 1 ):
+                    if x_move | y_move == 0:
+                        continue
                     val = self.calculate_val( op, [y_move, x_move] )
                     if val is not None:
                         #new_coord = ( op[0]+y_move, op[1]+x_move )
-                        moves.append( ( val, op, ( y_move, x_move ) ) )
+                        moves.append( ( val, ( op[0]+y_move, op[1]+x_move ) ) )
 
         if not moves:
             exit(0)
 
-        self.best_move = max( moves, key=lambda x:x[0] )[2]
-        self.adj_op = max( moves, key=lambda x:x[0] )[1]
+        # TODO equal
+        self.best_move = max( moves, key=lambda x:x[0] )[1]
 
-        self.convert_opponents( self.adj_op, self.best_move )
+        self.convert_opponents( self.best_move )
         self.init_states[self.best_move[0]][self.best_move[1]] = self.player
 
         for i in self.init_states:
             print(i)
 
-    def convert_opponents( self, adj_op, best_move ):
-        y_move, x_move = best_move
-        loc = list(adj_op)
+    def convert_opponents( self, new_move ):
 
-        while self.init_states[loc[0]][loc[1]] != self.player:
-            # should not cross the edge
-            self.init_states[loc[0]][loc[1]] = self.player
-            loc[0] = loc[0] - y_move
-            loc[1] = loc[1] - x_move
+        for i in ( -1, 0, 1 ):
+            for j in ( -1, 0, 1 ):
+                if i | j == 0:
+                    continue
+                x = new_move[0] + i
+                y = new_move[1] + j
+                if self.cross_edge( ( x, y ) ):
+                    continue
+                while self.init_states[x][y] == self.opponent:
+                    self.init_states[x][y] = self.player
+                    x = x + i
+                    y = y + j
+                    if self.cross_edge( ( x, y ) ):
+                       break
 
 
     def minimax( self, ):
@@ -116,7 +127,7 @@ class Reversi( object ):
 
     def cross_edge( self, coord ):
 
-        if coord[0] >= self.BOARD_SIZE or coord[1] >= self.BOARD_SIZE:
+        if coord[0] < 0 or coord[1] < 0 or coord[0] >= self.BOARD_SIZE or coord[1] >= self.BOARD_SIZE:
             return True
         return False
 
