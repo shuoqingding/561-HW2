@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import absolute_import, division, print_function
+import copy
 
 class InputException( Exception ): pass
 class TaskTypeError( InputException ): pass
@@ -74,132 +75,147 @@ class Reversi( object ):
             i = i + 1
         assert( i == j == self.BOARD_SIZE )
 
-    def find_best_move( self, parent, max_depth=1 ):
+    def print_node( self, node ):
+        value = node['value']
+        coord = [ "a","b","c","d","e","f","g","h" ]
+        if node['move'] in ( "root", "pass" ):
+            move = node['move']
+        else:
+            move = coord[node['move'][1]]+str(node['move'][0]+1)
+        if value == -float("Inf"):
+            print_val = "-Infinity"
+        elif value == float("Inf"):
+            print_val = "Infinity"
+        else:
+            print_val = value
+        print( "{0},{1},{2}".format( move, node['depth'], print_val ) )
+
+    def find_best_move( self, parent, max_depth=1, log=False ):
         depth = parent['depth'] + 1
         if  depth > max_depth:
-            return []
+            return
+
+        if depth % 2 == 1:
+            value = float('Inf')
+            player = self.player
+            opponent = self.opponent
+        else:
+            value = -float('Inf')
+            player = self.opponent
+            opponent = self.player
 
         nodes = parent['children']
-        for op in self.opponent_coord:
-            for x_move in ( -1, 0, 1 ):
-                for y_move in ( -1, 0, 1 ):
 
-                    if x_move | y_move == 0:
-                        continue
+        has_move = False
+        for x_move in range( self.BOARD_SIZE ):
+            for y_move in range( self.BOARD_SIZE ):
+                new_states = self.get_valid_states( (x_move, y_move), parent['states'], player, opponent )
+                if new_states is None:
+                    continue
+                new_move = ( x_move, y_move )
+                if depth == max_depth:
+                    value = self.get_value( new_states )
 
-                    val = self.calculate_val( op, [y_move, x_move] )
-                    new_move = ( op[0]+y_move, op[1]+x_move )
-                    states =convert_opponents( new_move )
+                node = { "move"    : new_move,
+                         "depth"   : depth,
+                         "states"  : new_states,
+                         "value"   : value,
+                         "children": [] }
+                self.print_node( node )
+                has_move = True
+                self.find_best_move( node, max_depth )
+                if depth % 2 == 1:
+                    parent['value'] = max( parent['value'], node['value'] )
+                else:
+                    parent['value'] = min( parent['value'], node['value'] )
+                nodes.append( node )
+                self.print_node( parent )
 
-                    # TODO update the parent's value
-                    # if depth % 2 == 1
+        if not has_move:
+            node = { "move"    : "pass",
+                     "depth"   : depth,
+                     "states"  : parent['states'],
+                     "value"   : value,
+                     "children": [] }
+            self.print_node( node )
+            self.print_node( parent )
+            nodes.append( node )
 
-                    node = { "move"    : new_move,
-                             "depth"   : depth,
-                             "state"   : states,
-                             "value"   : val,
-                             "children": [] }
-
-                    for i in range( len(nodes) ):
-                        if node['value'] < nodes[i]['value']:
-                            break
-                        else nodes[i]['value'] == node['value']:
-                            if node['move'][1] < nodes[i]['move'][1]:
-                                break
-                    nodes.insert( i, node )
-
-        for node in nodes:
-            
-
-
-    def calculate_val( self, orig_coord, move ):
-        valid_move = False
-        new_coord = (orig_coord[0]+move[0], orig_coord[1]+move[1])
-        if self.init_states[ new_coord[0] ][ new_coord[1] ] != "*":
-            return
-        if self.cross_edge( new_coord ):
-            return
-        for i in range(self.BOARD_SIZE-1):
-            tmp_coord = ( orig_coord[0]-move[0]*i, orig_coord[1]-move[1]*i )
-            if self.cross_edge( tmp_coord ):
+            if parent['move'] == 'pass':
                 return
-            if self.init_states[ tmp_coord[0] ][ tmp_coord[1] ] == self.player:
-                valid_move = True
-                break
+            self.find_best_move( node, max_depth )
 
-        if not valid_move:
+    def get_valid_states( self, new_coord, states, player, opponent ):
+        if states[ new_coord[0] ][ new_coord[1] ] != "*":
             return
 
-        return self.init_weight[ new_coord[0] ][ new_coord[1]]
+        for x in ( 1,0,-1 ):
+            for y in ( 1,0,-1 ):
+                if x | y == 0 or self.cross_edge( (new_coord[0]+x,new_coord[1]+y) ):
+                    continue
+                updated_states = copy.deepcopy( states )
+                updated_states[ new_coord[0] ][ new_coord[1] ] = player
+                if states[ new_coord[0]+x ][ new_coord[1]+y ] == opponent:
+                    updated_states[ new_coord[0]+x ][ new_coord[1]+y ] = player
+                    for i in range(2,self.BOARD_SIZE):
+                        tmp_coord = ( new_coord[0]+x*i, new_coord[1]+y*i )
+                        if self.cross_edge( tmp_coord ) or\
+                           states[ tmp_coord[0] ][ tmp_coord[1] ] == "*":
+                            break
+                        if states[ tmp_coord[0] ][ tmp_coord[1] ] == player:
+                            return updated_states
+                        updated_states[ tmp_coord[0] ][ tmp_coord[1] ] = player
 
+        return
 
-    def greedy( self, depth=0 ):
+    def get_value( self, states ):
+        value = 0
+        for x in range( self.BOARD_SIZE ):
+            for y in range( self.BOARD_SIZE ):
+                if states[x][y] == self.player:
+                    value = value + self.init_weight[x][y]
+                elif states[x][y] == self.opponent:
+                    value = value - self.init_weight[x][y]
+        return value
 
-        moves = []
-        for op in self.opponent_coord:
-            for x_move in ( -1, 0, 1 ):
-                for y_move in ( -1, 0, 1 ):
-                    if x_move | y_move == 0:
-                        continue
-                    val = self.calculate_val( op, [y_move, x_move] )
-                    new_move = ( op[0]+y_move, op[1]+x_move )
-                    states =convert_opponents( new_move )
-                    node = { "move": new_move,
-                             "value": val,
-                             "children": [],
-                             "state": states,
-                             "depth": depth+1,  }
+    def greedy( self, ):
+        self.minimax( 1, log=False )
 
-                    if val is not None:
-                        #new_coord = ( op[0]+y_move, op[1]+x_move )
-                        moves.append( ( val, ( op[0]+y_move, op[1]+x_move ) ) )
+    def minimax( self, depth, log=True ):
 
-        if not moves:
-            exit(0)
+        root = { 'value': -float('Inf'),
+                 'children': [],
+                 'states': copy.deepcopy( self.init_states ),
+                 'depth': 0,
+                 'move': 'root' }
+        print( "Node,Depth,Value" )
+        self.print_node( root )
+        self.find_best_move( root, depth, log=log )
 
-        # TODO equal
-        self.best_move = max( moves, key=lambda x:x[0] )[1]
-
-        self.convert_opponents( self.best_move )
-        self.init_states[self.best_move[0]][self.best_move[1]] = self.player
-
-        for i in self.init_states:
+        max_node = max( root['children'], key=lambda x:x['value'] )
+        max_value = max_node['value']
+        best_node = None
+        for node in root['children']:
+            if node['value'] == max_value:
+                if best_node is None or\
+                   node['move'][0]*10 + node['move'][1] < best_node['move'][0]*10 + best_node['move'][1]:
+                    best_node = node
+        for i in best_node['states']:
             print(i)
-
-    def convert_opponents( self, new_move ):
-
-        import copy
-        states = copy.deepcopy( self.init_states )
-        for i in ( -1, 0, 1 ):
-            for j in ( -1, 0, 1 ):
-                if i | j == 0:
-                    continue
-                x = new_move[0] + i
-                y = new_move[1] + j
-                if self.cross_edge( ( x, y ) ):
-                    continue
-                while states[x][y] == self.opponent:
-                    states[x][y] = self.player
-                    x = x + i
-                    y = y + j
-                    if self.cross_edge( ( x, y ) ):
-                       break
-
-                return states
-
-    def minimax( self, ):
-        pass
 
     def alphabeta( self, ):
         pass
 
     def cross_edge( self, coord ):
-
-        if coord[0] < 0 or coord[1] < 0 or coord[0] >= self.BOARD_SIZE or coord[1] >= self.BOARD_SIZE:
+        if coord[0] < 0 or coord[1] < 0 or\
+           coord[0] >= self.BOARD_SIZE or\
+           coord[1] >= self.BOARD_SIZE:
             return True
+
         return False
 
 
 if __name__ == "__main__":
     reversi = Reversi()
-    reversi.greedy()
+    #reversi.greedy()
+    reversi.minimax( 2 )
