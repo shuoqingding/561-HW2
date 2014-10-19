@@ -112,22 +112,28 @@ class Reversi( object ):
                 new_states = self.get_valid_states( (x_move, y_move), parent['states'], player, opponent )
                 if new_states is None:
                     continue
+
                 new_move = ( x_move, y_move )
                 if depth == max_depth:
                     value = self.get_value( new_states )
+                # TODO cutoff
 
                 node = { "move"    : new_move,
                          "depth"   : depth,
                          "states"  : new_states,
                          "value"   : value,
+                         "alpha"   : parent['alpha'],
+                         "beta"    : parent['beta'],
                          "children": [] }
                 self.print_node( node )
                 has_move = True
                 self.find_best_move( node, max_depth )
                 if depth % 2 == 1:
                     parent['value'] = max( parent['value'], node['value'] )
+                    parent['alpha'] = max( parent['alpha'], min( node['value'], node['beta'] ) )
                 else:
                     parent['value'] = min( parent['value'], node['value'] )
+                    parent['beta'] = min( parent['beta'], max( node['value'], node['alpha'] ) )
                 nodes.append( node )
                 self.print_node( parent )
 
@@ -136,6 +142,8 @@ class Reversi( object ):
                      "depth"   : depth,
                      "states"  : parent['states'],
                      "value"   : value,
+                     "alpha"   : -float('Inf'),
+                     "beta"    : float('Inf'),
                      "children": [] }
             self.print_node( node )
             self.print_node( parent )
@@ -186,11 +194,13 @@ class Reversi( object ):
 
     def minimax( self, depth, log=True ):
 
-        root = { 'value': -float('Inf'),
-                 'children': [],
-                 'states': copy.deepcopy( self.init_states ),
-                 'depth': 0,
-                 'move': 'root' }
+        root = { "value"   : -float('Inf'),
+                 "states"  : copy.deepcopy( self.init_states ),
+                 "depth"   : 0,
+                 "alpha"   : -float('Inf')
+                 "beta"    : float('Inf')
+                 "move"    : 'root',
+                 "children": [] }
 
         if log:
             print( "Node,Depth,Value" )
