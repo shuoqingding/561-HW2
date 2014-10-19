@@ -9,6 +9,13 @@ class PlayerTypeError( InputException ): pass
 
 next_line = lambda f: f.readline().rstrip()
 
+def readable_value( val ):
+    if val == -float("Inf"):
+        return "-Infinity"
+    elif val == float("Inf"):
+        return "Infinity"
+    return val
+
 class Reversi( object ):
 
     GREEDY      = '1'
@@ -75,22 +82,24 @@ class Reversi( object ):
             i = i + 1
         assert( i == j == self.BOARD_SIZE )
 
-    def print_node( self, node ):
-        value = node['value']
+    def print_node( self, node, alpha_beta=False ):
         coord = [ "a","b","c","d","e","f","g","h" ]
         if node['move'] in ( "root", "pass" ):
             move = node['move']
         else:
             move = coord[node['move'][1]]+str(node['move'][0]+1)
-        if value == -float("Inf"):
-            print_val = "-Infinity"
-        elif value == float("Inf"):
-            print_val = "Infinity"
-        else:
-            print_val = value
-        print( "{0},{1},{2}".format( move, node['depth'], print_val ) )
 
-    def find_best_move( self, parent, max_depth=1, log=False ):
+        value = readable_value( node['value'] )
+
+        if alpha_beta:
+            alpha = readable_value( node['alpha'] )
+            beta = readable_value( node['beta'] )
+            print( "{0},{1},{2},{3},{4}".format(
+                move, node['depth'], value, alpha, beta ) )
+        else:
+            print( "{0},{1},{2}".format( move, node['depth'], value ) )
+
+    def find_best_move( self, parent, max_depth=1, log=False, alpha_beta=False ):
         depth = parent['depth'] + 1
         if  depth > max_depth:
             return
@@ -116,7 +125,6 @@ class Reversi( object ):
                 new_move = ( x_move, y_move )
                 if depth == max_depth:
                     value = self.get_value( new_states )
-                # TODO cutoff
 
                 node = { "move"    : new_move,
                          "depth"   : depth,
@@ -125,17 +133,30 @@ class Reversi( object ):
                          "alpha"   : parent['alpha'],
                          "beta"    : parent['beta'],
                          "children": [] }
-                self.print_node( node )
+                self.print_node( node, alpha_beta=alpha_beta )
                 has_move = True
-                self.find_best_move( node, max_depth )
-                if depth % 2 == 1:
-                    parent['value'] = max( parent['value'], node['value'] )
-                    parent['alpha'] = max( parent['alpha'], min( node['value'], node['beta'] ) )
+                if not alpha_beta or ( abs(node['value']) == float('Inf') )\
+                   or ( depth % 2 == 1 and node['value'] < node['beta'] )\
+                   or ( depth % 2 == 0 and node['value'] > node['alpha'] ):
+                    self.find_best_move( node, max_depth, log=log, alpha_beta=alpha_beta )
+                    if depth % 2 == 1:
+                        parent['value'] = max( parent['value'], node['value'] )
+                        parent['alpha'] = max( parent['alpha'], min( node['value'], node['beta'] ) )
+                    else:
+                        parent['value'] = min( parent['value'], node['value'] )
+                        parent['beta'] = min( parent['beta'], max( node['value'], node['alpha'] ) )
+                    nodes.append( node )
+                    self.print_node( parent, alpha_beta=alpha_beta )
                 else:
-                    parent['value'] = min( parent['value'], node['value'] )
-                    parent['beta'] = min( parent['beta'], max( node['value'], node['alpha'] ) )
-                nodes.append( node )
-                self.print_node( parent )
+                    if depth % 2 == 1:
+                        parent['value'] = max( parent['value'], node['value'] )
+                        #parent['alpha'] = max( parent['alpha'], min( node['value'], node['beta'] ) )
+                    else:
+                        parent['value'] = min( parent['value'], node['value'] )
+                        #parent['beta'] = min( parent['beta'], max( node['value'], node['alpha'] ) )
+                    nodes.append( node )
+                    self.print_node( parent, alpha_beta=alpha_beta )
+                    return
 
         if not has_move:
             node = { "move"    : "pass",
@@ -145,13 +166,14 @@ class Reversi( object ):
                      "alpha"   : -float('Inf'),
                      "beta"    : float('Inf'),
                      "children": [] }
-            self.print_node( node )
-            self.print_node( parent )
+            self.print_node( node, alpha_beta=alpha_beta )
+            self.print_node( parent, alpha_beta=alpha_beta )
             nodes.append( node )
 
             if parent['move'] == 'pass':
                 return
-            self.find_best_move( node, max_depth )
+            self.find_best_move( node, max_depth,log=log, alpha_beta=alpha_beta )
+
 
     def get_valid_states( self, new_coord, states, player, opponent ):
         if states[ new_coord[0] ][ new_coord[1] ] != "*":
@@ -192,21 +214,24 @@ class Reversi( object ):
     def cutoff_minimax( self ):
         self.minimax( self.cutoff_depth )
 
-    def minimax( self, depth, log=True ):
+    def minimax( self, depth, log=True, alpha_beta=False ):
 
         root = { "value"   : -float('Inf'),
                  "states"  : copy.deepcopy( self.init_states ),
                  "depth"   : 0,
-                 "alpha"   : -float('Inf')
-                 "beta"    : float('Inf')
+                 "alpha"   : -float('Inf'),
+                 "beta"    : float('Inf'),
                  "move"    : 'root',
                  "children": [] }
 
         if log:
-            print( "Node,Depth,Value" )
-            self.print_node( root )
+            if alpha_beta:
+                print( "Node,Depth,Value,Alpha,Beta" )
+            else:
+                print( "Node,Depth,Value" )
+            self.print_node( root, alpha_beta=alpha_beta )
 
-        self.find_best_move( root, depth, log=log )
+        self.find_best_move( root, depth, log=log, alpha_beta=alpha_beta )
 
         max_node = max( root['children'], key=lambda x:x['value'] )
         max_value = max_node['value']
@@ -220,7 +245,7 @@ class Reversi( object ):
             print(i)
 
     def alphabeta( self, ):
-        pass
+        self.minimax( self.cutoff_depth, log=True, alpha_beta=True )
 
     def cross_edge( self, coord ):
         if coord[0] < 0 or coord[1] < 0 or\
@@ -234,4 +259,5 @@ class Reversi( object ):
 if __name__ == "__main__":
     reversi = Reversi()
     #reversi.greedy()
-    reversi.cutoff_minimax()
+    #reversi.cutoff_minimax()
+    reversi.alphabeta()
