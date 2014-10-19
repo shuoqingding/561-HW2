@@ -181,6 +181,9 @@ class Reversi( object ):
     def greedy( self, ):
         self.minimax( 1, log=False )
 
+    def cutoff_minimax( self ):
+        self.minimax( self.cutoff_depth )
+
     def minimax( self, depth, log=True ):
 
         root = { 'value': -float('Inf'),
@@ -188,8 +191,11 @@ class Reversi( object ):
                  'states': copy.deepcopy( self.init_states ),
                  'depth': 0,
                  'move': 'root' }
-        print( "Node,Depth,Value" )
-        self.print_node( root )
+
+        if log:
+            print( "Node,Depth,Value" )
+            self.print_node( root )
+
         self.find_best_move( root, depth, log=log )
 
         max_node = max( root['children'], key=lambda x:x['value'] )
@@ -218,4 +224,4 @@ class Reversi( object ):
 if __name__ == "__main__":
     reversi = Reversi()
     #reversi.greedy()
-    reversi.minimax( 2 )
+    reversi.cutoff_minimax()
