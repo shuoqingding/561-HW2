@@ -135,10 +135,17 @@ class Reversi( object ):
                          "children": [] }
                 self.print_node( node, alpha_beta=alpha_beta )
                 has_move = True
-                if not alpha_beta or ( abs(node['value']) == float('Inf') )\
-                   or ( depth % 2 == 1 and node['value'] < node['beta'] )\
-                   or ( depth % 2 == 0 and node['value'] > node['alpha'] ):
-                    self.find_best_move( node, max_depth, log=log, alpha_beta=alpha_beta )
+                self.find_best_move( node, max_depth, log=log, alpha_beta=alpha_beta )
+                if alpha_beta and ( depth % 2 == 1 and node['value'] >= parent['beta'] )\
+                   or ( depth % 2 == 0 and node['value'] <= parent['alpha'] ):
+                    if depth % 2 == 1:
+                        parent['value'] = max( parent['value'], node['value'] )
+                    else:
+                        parent['value'] = min( parent['value'], node['value'] )
+                    nodes.append( node )
+                    self.print_node( parent, alpha_beta=alpha_beta )
+                    return
+                else:
                     if depth % 2 == 1:
                         parent['value'] = max( parent['value'], node['value'] )
                         parent['alpha'] = max( parent['alpha'], min( node['value'], node['beta'] ) )
@@ -147,16 +154,6 @@ class Reversi( object ):
                         parent['beta'] = min( parent['beta'], max( node['value'], node['alpha'] ) )
                     nodes.append( node )
                     self.print_node( parent, alpha_beta=alpha_beta )
-                else:
-                    if depth % 2 == 1:
-                        parent['value'] = max( parent['value'], node['value'] )
-                        #parent['alpha'] = max( parent['alpha'], min( node['value'], node['beta'] ) )
-                    else:
-                        parent['value'] = min( parent['value'], node['value'] )
-                        #parent['beta'] = min( parent['beta'], max( node['value'], node['alpha'] ) )
-                    nodes.append( node )
-                    self.print_node( parent, alpha_beta=alpha_beta )
-                    return
 
         if not has_move:
             node = { "move"    : "pass",
