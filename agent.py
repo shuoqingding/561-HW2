@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.6
 
 from __future__ import absolute_import, division, print_function
 import copy
@@ -54,6 +54,7 @@ class Reversi( object ):
             self.cutoff_depth = int( next_line( f ) )
             self.read_states( f )
             self.init_weight()
+        self.log = []
 
     def init_weight( self ):
         self.init_weight = []
@@ -94,10 +95,10 @@ class Reversi( object ):
         if alpha_beta:
             alpha = readable_value( node['alpha'] )
             beta = readable_value( node['beta'] )
-            print( "{0},{1},{2},{3},{4}".format(
+            self.log.append( "{0},{1},{2},{3},{4}\n".format(
                 move, node['depth'], value, alpha, beta ) )
         else:
-            print( "{0},{1},{2}".format( move, node['depth'], value ) )
+            self.log.append( "{0},{1},{2}\n".format( move, node['depth'], value ) )
 
     def find_best_move( self, parent, max_depth=1, log=False, alpha_beta=False ):
         depth = parent['depth'] + 1
@@ -113,11 +114,16 @@ class Reversi( object ):
             player = self.opponent
             opponent = self.player
 
+        if self.is_end( parent['states'] ):
+            parent['value'] = self.get_value( parent['states'] )
+            return
+
         nodes = parent['children']
 
         has_move = False
         for x_move in range( self.BOARD_SIZE ):
             for y_move in range( self.BOARD_SIZE ):
+
                 new_states = self.get_valid_states( (x_move, y_move), parent['states'], player, opponent )
                 if new_states is None:
                     continue
@@ -133,11 +139,15 @@ class Reversi( object ):
                          "alpha"   : parent['alpha'],
                          "beta"    : parent['beta'],
                          "children": [] }
-                self.print_node( node, alpha_beta=alpha_beta )
                 has_move = True
+
+                if self.is_end( new_states ):
+                    return
+
+                self.print_node( node, alpha_beta=alpha_beta )
                 self.find_best_move( node, max_depth, log=log, alpha_beta=alpha_beta )
-                if alpha_beta and ( depth % 2 == 1 and node['value'] >= parent['beta'] )\
-                   or ( depth % 2 == 0 and node['value'] <= parent['alpha'] ):
+                if alpha_beta and ( ( depth % 2 == 1 and node['value'] >= parent['beta'] )\
+                   or ( depth % 2 == 0 and node['value'] <= parent['alpha'] ) ):
                     if depth % 2 == 1:
                         parent['value'] = max( parent['value'], node['value'] )
                     else:
@@ -156,20 +166,56 @@ class Reversi( object ):
                     self.print_node( parent, alpha_beta=alpha_beta )
 
         if not has_move:
+            if parent['move'] == 'pass':
+                value = self.get_value( parent['states'] )
+
             node = { "move"    : "pass",
                      "depth"   : depth,
                      "states"  : parent['states'],
                      "value"   : value,
-                     "alpha"   : -float('Inf'),
-                     "beta"    : float('Inf'),
+                     "alpha"   : parent['alpha'],
+                     "beta"    : parent['beta'],
                      "children": [] }
-            self.print_node( node, alpha_beta=alpha_beta )
-            self.print_node( parent, alpha_beta=alpha_beta )
-            nodes.append( node )
 
-            if parent['move'] == 'pass':
+            self.print_node( node, alpha_beta=alpha_beta )
+            if parent['move'] != 'pass':
+                self.find_best_move( node, max_depth,log=log, alpha_beta=alpha_beta )
+
+            if alpha_beta and ( ( depth % 2 == 1 and node['value'] >= parent['beta'] )\
+               or ( depth % 2 == 0 and node['value'] <= parent['alpha'] ) ):
+                if depth % 2 == 1:
+                    parent['value'] = max( parent['value'], node['value'] )
+                else:
+                    parent['value'] = min( parent['value'], node['value'] )
+                nodes.append( node )
+                self.print_node( parent, alpha_beta=alpha_beta )
                 return
-            self.find_best_move( node, max_depth,log=log, alpha_beta=alpha_beta )
+            else:
+                if depth % 2 == 1:
+                    parent['value'] = max( parent['value'], node['value'] )
+                    parent['alpha'] = max( parent['alpha'], min( node['value'], node['beta'] ) )
+                else:
+                    parent['value'] = min( parent['value'], node['value'] )
+                    parent['beta'] = min( parent['beta'], max( node['value'], node['alpha'] ) )
+                nodes.append( node )
+                self.print_node( parent, alpha_beta=alpha_beta )
+
+    def is_end( self, states ):
+
+        player_num = 0
+        opponent_num = 0
+        for i in range( self.BOARD_SIZE ):
+            for j in range( self.BOARD_SIZE ):
+                if states[i][j] == self.player:
+                    player_num = player_num + 1
+                if states[i][j] == self.opponent:
+                    opponent_num = opponent_num + 1
+
+        if opponent_num == 0 or player_num == 0 or\
+           opponent_num + player_num == self.BOARD_SIZE*self.BOARD_SIZE:
+            return True
+
+        return False
 
 
     def get_valid_states( self, new_coord, states, player, opponent ):
@@ -220,26 +266,35 @@ class Reversi( object ):
                  "beta"    : float('Inf'),
                  "move"    : 'root',
                  "children": [] }
-
         if log:
             if alpha_beta:
-                print( "Node,Depth,Value,Alpha,Beta" )
+                self.log.append( "Node,Depth,Value,Alpha,Beta\n" )
             else:
-                print( "Node,Depth,Value" )
+                self.log.append( "Node,Depth,Value\n" )
+
+            if self.is_end( self.init_states ):
+                root['value'] = self.get_value( self.init_states )
             self.print_node( root, alpha_beta=alpha_beta )
 
         self.find_best_move( root, depth, log=log, alpha_beta=alpha_beta )
 
-        max_node = max( root['children'], key=lambda x:x['value'] )
-        max_value = max_node['value']
-        best_node = None
-        for node in root['children']:
-            if node['value'] == max_value:
-                if best_node is None or\
-                   node['move'][0]*10 + node['move'][1] < best_node['move'][0]*10 + best_node['move'][1]:
-                    best_node = node
-        for i in best_node['states']:
-            print(i)
+        if not root['children']:
+            best_node = root
+        else:
+            max_node = max( root['children'], key=lambda x:x['value'] )
+            max_value = max_node['value']
+            best_node = None
+            for node in root['children']:
+                if node['value'] == max_value:
+                    if best_node is None or\
+                       node['move'][0]*10 + node['move'][1] < best_node['move'][0]*10 + best_node['move'][1]:
+                        best_node = node
+
+        with open( "output.txt", "w" ) as fout:
+            for i in best_node['states']:
+                fout.write( "".join(i) + '\n' )
+            for log in self.log:
+                fout.write( log )
 
     def alphabeta( self, ):
         self.minimax( self.cutoff_depth, log=True, alpha_beta=True )
@@ -252,9 +307,14 @@ class Reversi( object ):
 
         return False
 
+    def run( self, ):
+        if self.task_num == "1":
+            self.greedy()
+        if self.task_num == "2":
+            self.cutoff_minimax()
+        if self.task_num == "3":
+            self.alphabeta()
 
 if __name__ == "__main__":
     reversi = Reversi()
-    #reversi.greedy()
-    #reversi.cutoff_minimax()
-    reversi.alphabeta()
+    reversi.run()
